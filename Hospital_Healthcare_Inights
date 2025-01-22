@@ -1,0 +1,220 @@
+-- Data Cleaning
+
+-- 1. Remove Duplicates
+-- 2. Standarize the Data
+-- 3. Null Values or Blank Values
+
+
+USE world_hospital_healthcare;
+SELECT * 
+FROM `world_hospital_healthcare`.`hospital_ healthcare`;
+RENAME TABLE `hospital_ healthcare` TO hospital_healthcare;
+
+SELECT *
+FROM hospital_healthcare;
+
+
+CREATE TABLE hospital_healthcare_staging1
+LIKE hospital_healthcare;
+
+SELECT *
+FROM hospital_healthcare_staging1;
+
+INSERT hospital_healthcare_staging1
+SELECT *
+FROM hospital_healthcare;
+
+SELECT *,
+ROW_NUMBER() OVER(
+PARTITION BY Staff_ID, Bed_ID, Dpt_ID, ID, 'Name') AS row_num
+FROM hospital_healthcare_staging1;
+
+
+CREATE TABLE `hospital_healthcare_staging2` (
+  `Staff_Id` int DEFAULT NULL,
+  `Bed_ID` text,
+  `Dpt_ID` int DEFAULT NULL,
+  `ID` int DEFAULT NULL,
+  `Name` text,
+  `Gender` text,
+  `City` text,
+  `State` text,
+  `Age` int DEFAULT NULL,
+  `Patient type` text,
+  `Status` text,
+  `Treatment Cost` text,
+  `Bed` text,
+  `LOS` int DEFAULT NULL,
+  `ER_Time` int DEFAULT NULL,
+  `Date` text,
+  `Feedback` text,
+  `Rating` int DEFAULT NULL,
+  `Age Bucket` text,
+  `Custom` text,
+  `FZ me` text,
+  `Illness_Type` text,
+  `row_num`INT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+SELECT *
+FROM hospital_healthcare_staging2
+WHERE row_num = 1;
+
+INSERT INTO hospital_healthcare_staging2
+SELECT *,
+ROW_NUMBER() OVER(
+PARTITION BY Staff_ID, Bed_ID, Dpt_ID, ID, 'Name') AS row_num
+FROM hospital_healthcare_staging1;
+
+-- Data has no Duplicates
+-- -------------------------------------------------------------------
+-- 2. Standardizing Data
+
+SELECT DISTINCT Illness_Type
+FROM hospital_healthcare_staging2
+ORDER BY 1; 
+
+SELECT `Date`,
+STR_TO_DATE(`Date`, '%m/%d/%Y %H:%i')
+FROM hospital_healthcare_staging2;
+
+SET SQL_SAFE_UPDATES = 0;
+
+UPDATE hospital_healthcare_staging2
+SET `Date` = STR_TO_DATE(`Date`, '%m/%d/%Y %H:%i')
+WHERE `Date` IS NOT NULL;
+
+ALTER TABLE hospital_healthcare_staging2
+MODIFY COLUMN `Date` DATE;
+
+
+SELECT *
+FROM hospital_healthcare_staging2
+;
+
+-- ----------------------------------------------------------------
+ -- 3. NULL OR BLANK 
+SELECT *
+FROM hospital_healthcare_staging2
+WHERE Custom is NULL; 
+
+DELETE
+FROM hospital_healthcare_staging2
+WHERE Custom is NULL;
+
+SELECT *
+FROM hospital_healthcare_staging2
+;
+
+ALTER TABLE hospital_healthcare_staging2
+DROP COLUMN row_num;
+
+SELECT *
+FROM hospital_healthcare_staging2
+;
+
+SELECT *
+FROM hospital_healthcare_staging2
+WHERE `Treatment Cost` < 0;
+
+SELECT MIN(Date) AS Min_Date, MAX(Date) AS Max_Date
+FROM hospital_healthcare_staging2;
+
+SELECT *
+FROM hospital_healthcare_staging2
+WHERE `Treatment Cost` REGEXP '[^0-9.]';
+
+ALTER TABLE hospital_healthcare_staging2
+DROP COLUMN Age_Category;
+
+SELECT *
+FROM hospital_healthcare_staging2
+;
+
+
+-- Exploratory Data Analysis
+
+DESCRIBE hospital_healthcare_staging2;
+SHOW INDEX FROM hospital_healthcare_staging2;
+
+-- Data Quality checks. Missing Values
+
+SELECT 
+    SUM(CASE WHEN `Staff_Id` IS NULL THEN 1 ELSE 0 END) AS Missing_Staff_Id,
+    SUM(CASE WHEN `Bed_ID` IS NULL THEN 1 ELSE 0 END) AS Missing_Bed_ID,
+    SUM(CASE WHEN `Dpt_ID` IS NULL THEN 1 ELSE 0 END) AS Missing_Dpt_ID,
+    SUM(CASE WHEN `Age` IS NULL THEN 1 ELSE 0 END) AS Missing_Age
+FROM hospital_healthcare_staging2;
+
+-- Unique Value Distribution
+
+SELECT 
+    COUNT(DISTINCT `Staff_Id`) AS Unique_Staff_Ids,
+    COUNT(DISTINCT `Bed_ID`) AS Unique_Bed_Ids,
+    COUNT(DISTINCT `City`) AS Unique_Cities
+FROM hospital_healthcare_staging2;
+
+-- 2. Numerical Data Analysis
+
+SELECT 
+    AVG(`Age`) AS Avg_Age,
+    MIN(`Age`) AS Min_Age,
+    MAX(`Age`) AS Max_Age,
+    STDDEV(`Age`) AS StdDev_Age,
+    AVG(`Treatment Cost` + 0) AS Avg_Treatment_Cost,
+    MIN(`LOS`) AS Min_LOS,
+    MAX(`LOS`) AS Max_LOS
+FROM hospital_healthcare_staging2;
+
+-- Outliers Detection
+
+SELECT *
+FROM hospital_healthcare_staging2
+WHERE `Age` > 100 OR `LOS` > 50; -- Example thresholds
+
+-- 3. Categorical Data Analysis
+
+SELECT 
+    `Gender`, COUNT(*) AS Count
+FROM hospital_healthcare_staging2
+GROUP BY `Gender`
+ORDER BY Count DESC;
+
+-- City-Based Analysis
+
+SELECT 
+    `City`, COUNT(*) AS Patient_Count
+FROM hospital_healthcare_staging2
+GROUP BY `City`
+ORDER BY Patient_Count DESC
+LIMIT 10;
+
+-- Illness Types: Frequency of illnesses
+
+SELECT 
+    `Illness_Type`, COUNT(*) AS Frequency
+FROM hospital_healthcare_staging2
+GROUP BY `Illness_Type`
+ORDER BY Frequency DESC;
+
+-- 4. Temporal Analysis
+
+SELECT 
+    DATE_FORMAT(`Date`, '%Y-%m') AS Month, 
+    COUNT(*) AS Admissions
+FROM hospital_healthcare_staging2
+GROUP BY Month
+ORDER BY Month;
+
+-- 5. Relationship Analysis
+-- Age vs. Treatment Cost:
+
+SELECT `Age`, AVG(`Treatment Cost` + 0) AS Avg_Cost
+FROM hospital_healthcare_staging2
+GROUP BY `Age`
+ORDER BY `Age`;
+
+-- ER Time vs. LOS:
+SELECT AVG(`ER_Time`) AS Avg_ER_Time, AVG(`LOS`) AS Avg_LOS
+FROM hospital_healthcare_staging2
+GROUP BY `Illness_Type`;
